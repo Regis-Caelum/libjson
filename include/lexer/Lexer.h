@@ -4,6 +4,7 @@
 #include "Token.h"
 
 #include <string>
+#include <vector>
 
 class Lexer
 {
@@ -12,21 +13,36 @@ public:
 
     std::string input() const { return input_; }
 
-    void skipWhitespace();
     Token nextToken();
 
-    Token parseString();
-    Token parseNumber();
-    Token parseLiteral();
+    std::vector<Token> tokenise();
 
 private:
     std::string input_;
     size_t pos_;
 
+    void skipWhitespace();
     char peek() const { return pos_ < input_.size() ? input_[pos_] : '\0'; }
     char get() { return pos_ < input_.size() ? input_[pos_++] : '\0'; }
     bool eof() const { return pos_ >= input_.size(); }
+
+    Token parseString();
+    Token parseNumber();
+    Token parseLiteral();
 };
+
+inline std::vector<Token> Lexer::tokenise()
+{
+    std::vector<Token> tokens;
+    for (;;)
+    {
+        Token t = nextToken();
+        tokens.push_back(t);
+        if (t.type == Token::EOFTOKEN)
+            break;
+    }
+    return tokens;
+}
 
 inline void Lexer::skipWhitespace()
 {

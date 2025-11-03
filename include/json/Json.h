@@ -23,6 +23,9 @@ public:
     Json &operator=(const Json &) = default;
     Json &operator=(Json &&) noexcept = default;
 
+    Json(std::initializer_list<std::pair<const std::string, JsonValue>> list)
+        : object_(list) {}
+
     JsonValue &operator[](const std::string &key) { return object_[key]; }
     JsonValue &operator[](const char *key) { return object_[std::string(key)]; }
 

@@ -133,7 +133,7 @@ inline std::ostream &operator<<(std::ostream &os, const Json &j)
     {
         if (!first)
             os << ", ";
-        os << '\\\"' << kv.first << "\\\": " << kv.second;
+        os << '\"' << kv.first << "\": " << kv.second;
         first = false;
     }
     os << '}';
@@ -160,7 +160,7 @@ inline std::ostream &operator<<(std::ostream &os, const JsonValue &json)
     }
     else if (json.is_string())
     {
-        os << '\\\"' << static_cast<JsonValue::string_t>(json) << '\\\"';
+        os << '\"' << static_cast<JsonValue::string_t>(json) << '\"';
     }
     else if (json.is_array())
     {

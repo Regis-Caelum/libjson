@@ -1,0 +1,65 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "CMake: Configure Tests (Ninja + Clang)",
+            "command": "cmake",
+            "args": [
+                "-S",
+                "${workspaceFolder}",
+                "-B",
+                "out/build/x64-debug",
+                "-G",
+                "Ninja",
+                "-DCMAKE_C_COMPILER=clang",
+                "-DCMAKE_CXX_COMPILER=clang++",
+                "-DCMAKE_LINKER=lld-link",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DBUILD_TESTS=ON"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "options": {
+                "env": {
+                    "PATH": "C:/Program Files/LLVM/bin;${env:PATH}"
+                }
+            }
+        },
+        {
+            "type": "shell",
+            "label": "CMake: Build Tests (Ninja + Clang)",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "out/build/x64-debug",
+                "--target",
+                "libjson_tests"
+            ],
+            "group": "build",
+            "dependsOn": "CMake: Configure Tests (Ninja + Clang)",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "type": "shell",
+            "label": "Run GTest Directly",
+            "command": "${workspaceFolder}/out/build/x64-debug/libjson_tests.exe",
+            "args": [
+                "--gtest_color=yes",
+                "--gtest_repeat=1"
+            ],
+            "group": "test",
+            "dependsOn": "CMake: Build Tests (Ninja + Clang)",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Run GTest",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: Build Tests (Ninja + Clang)",
+                "Run GTest Directly"
+            ],
+            "group": "build"
+        }
+    ]
+}

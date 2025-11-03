@@ -39,46 +39,128 @@ void Parser::consume()
 
 bool Parser::validate()
 {
-    Token prev = tokens_.front();
-    std::stack<Token> s;
-    if (prev.type != Token::LBRACE && prev.type != Token::LBRACKET)
+    if (tokens_.empty())
         return false;
 
-    if (prev.type != Token::RBRACE && prev.type != Token::RBRACKET)
-        return false;
+    struct Context
+    {
+        Token::Type type;
+        bool expectValue;
+        bool expectColon;
+        bool expectComma;
+    };
 
-    if (tokens_.front().type == Token::LBRACE && tokens_.back().type != Token::RBRACE)
-        return false;
-
-    if (tokens_.front().type == Token::LBRACKET && tokens_.back().type != Token::RBRACKET)
-        return false;
+    std::stack<Context> s;
+    pos_ = 0;
 
     while (pos_ < tokens_.size())
     {
         Token t = current();
         consume();
 
-        if (t.type == Token::LBRACE)
-            s.push(t);
-        else if (t.type == Token::RBRACE)
+        if (s.empty())
         {
-            if (s.empty() || s.top().type != Token::LBRACE)
+            if (t.type != Token::LBRACE && t.type != Token::LBRACKET)
                 return false;
-            s.pop();
-        }
-        else if (t.type == Token::LBRACKET)
-            s.push(t);
-        else if (t.type == Token::RBRACKET)
-        {
-            if (s.empty() || s.top().type != Token::LBRACKET)
-                return false;
-            s.pop();
+            s.push({t.type, t.type == Token::LBRACKET, false, false});
+            continue;
         }
 
-        prev = t;
+        Context &ctx = s.top();
+
+        switch (t.type)
+        {
+        case Token::LBRACE:
+        case Token::LBRACKET:
+            if (!ctx.expectValue)
+                return false;
+            s.push({t.type, t.type == Token::LBRACKET, false, false});
+            ctx.expectValue = false;
+            ctx.expectComma = true;
+            break;
+
+        case Token::RBRACE:
+            if (ctx.type != Token::LBRACE)
+                return false;
+            if (ctx.expectValue && !ctx.expectColon)
+                return false;
+            s.pop();
+            if (!s.empty())
+            {
+                Context &parent = s.top();
+                parent.expectValue = false;
+                parent.expectComma = true;
+            }
+            break;
+
+        case Token::RBRACKET:
+            if (ctx.type != Token::LBRACKET)
+                return false;
+            if (ctx.expectValue)
+                return false;
+            s.pop();
+            if (!s.empty())
+            {
+                Context &parent = s.top();
+                parent.expectValue = false;
+                parent.expectComma = true;
+            }
+            break;
+
+        case Token::STRING:
+            if (ctx.type == Token::LBRACE)
+            {
+                if (!ctx.expectValue)
+                    return false;
+                ctx.expectColon = true;
+                ctx.expectValue = false;
+            }
+            else if (ctx.type == Token::LBRACKET)
+            {
+                if (!ctx.expectValue)
+                    return false;
+                ctx.expectValue = false;
+                ctx.expectComma = true;
+            }
+            else
+                return false;
+            break;
+
+        case Token::INTEGER:
+        case Token::FLOAT:
+        case Token::TRUE:
+        case Token::FALSE:
+        case Token::NULLTOKEN:
+            if (!ctx.expectValue)
+                return false;
+            ctx.expectValue = false;
+            ctx.expectComma = true;
+            ctx.expectColon = false;
+            break;
+
+        case Token::COLON:
+            if (!ctx.expectColon)
+                return false;
+            ctx.expectColon = false;
+            ctx.expectValue = true;
+            break;
+
+        case Token::COMMA:
+            if (!ctx.expectComma)
+                return false;
+            if (ctx.type == Token::LBRACE)
+                ctx.expectValue = true;
+            else if (ctx.type == Token::LBRACKET)
+                ctx.expectValue = true;
+            ctx.expectComma = false;
+            break;
+
+        default:
+            return false;
+        }
     }
 
-    return true;
+    return s.empty();
 }
 
 #endif // PARSER_H

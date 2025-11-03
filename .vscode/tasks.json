@@ -16,7 +16,8 @@
                 "-DCMAKE_CXX_COMPILER=clang++",
                 "-DCMAKE_LINKER=lld-link",
                 "-DCMAKE_BUILD_TYPE=Debug",
-                "-DBUILD_TESTS=ON"
+                "-DBUILD_TESTS=ON",
+                "-Wno-dev"
             ],
             "group": "build",
             "problemMatcher": "$msCompile",

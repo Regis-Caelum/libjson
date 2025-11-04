@@ -76,6 +76,8 @@
         "xmemory": "cpp",
         "xstring": "cpp",
         "xtree": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "testparser": "cpp",
+        "stack": "cpp"
     }
 }

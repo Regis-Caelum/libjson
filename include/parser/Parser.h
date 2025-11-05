@@ -99,7 +99,7 @@ bool Parser::validate()
         case Token::RBRACE:
             if (ctx.type != Token::LBRACE)
                 return false;
-            if (ctx.expectColon || ctx.expectValue)
+            if (ctx.expectColon || (ctx.expectValue && ctx.hasValue))
                 return false;
             s.pop();
             if (!s.empty())
@@ -189,7 +189,7 @@ inline Json Parser::buildJson()
     if (!validate())
         throw std::runtime_error("Invalid JSON");
 
-    reset(); // Reset position before parsing
+    reset();
     JsonValue v = parseValue(current());
 
     if (!v.is_object())

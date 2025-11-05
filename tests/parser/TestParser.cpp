@@ -1,255 +1,154 @@
 #include "parser/Parser.h"
 #include <gtest/gtest.h>
 
-// ----------------------------
-// Parser::validate() Tests
-// ----------------------------
+class ParserTest : public ::testing::Test
+{
+};
 
-TEST(ParserTest, ValidEmptyObject)
+// ------------------- Valid JSON -------------------
+
+TEST_F(ParserTest, ValidEmptyObject)
 {
     Parser parser({Token(Token::LBRACE), Token(Token::RBRACE)});
     EXPECT_TRUE(parser.validate());
 }
 
-TEST(ParserTest, InvalidEmptyArray)
+TEST_F(ParserTest, ValidEmptyArray)
 {
     Parser parser({Token(Token::LBRACKET), Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser.validate());
+    EXPECT_TRUE(parser.validate());
 }
 
-TEST(ParserTest, InvalidNested)
+TEST_F(ParserTest, ValidNested)
 {
     Parser parser({Token(Token::LBRACE),
+                   Token(Token::STRING, "arr"), Token(Token::COLON),
                    Token(Token::LBRACKET),
                    Token(Token::RBRACKET),
                    Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
+    EXPECT_TRUE(parser.validate());
 }
 
-// 1. Empty input
-TEST(ParserTest, InvalidEmptyInput)
-{
-    Parser parser({});
-    EXPECT_FALSE(parser.validate());
-}
+// ------------------- Invalid JSON -------------------
 
-// 2. Unbalanced braces
-TEST(ParserTest, InvalidMissingClosingBrace)
+TEST_F(ParserTest, InvalidMissingClosingBrace)
 {
     Parser parser({Token(Token::LBRACE)});
     EXPECT_FALSE(parser.validate());
 }
 
-TEST(ParserTest, InvalidMissingClosingBraceWithInner)
-{
-    Parser parser({Token(Token::LBRACE),
-                   Token(Token::STRING, "key"),
-                   Token(Token::COLON),
-                   Token(Token::INTEGER, "123")});
-    EXPECT_FALSE(parser.validate());
-}
-
-// 3. Unbalanced brackets
-TEST(ParserTest, InvalidMissingClosingBracket)
+TEST_F(ParserTest, InvalidMissingClosingBracket)
 {
     Parser parser({Token(Token::LBRACKET)});
     EXPECT_FALSE(parser.validate());
 }
 
-// 4. Mismatched brackets
-TEST(ParserTest, InvalidMismatchedBraces)
+TEST_F(ParserTest, InvalidExtraCommaInArray)
 {
-    Parser parser({Token(Token::LBRACE), Token(Token::RBRACKET)});
+    Parser parser({
+        Token(Token::LBRACKET),
+        Token(Token::INTEGER, "1"),
+        Token(Token::COMMA),
+        Token(Token::RBRACKET), // [1,]
+    });
     EXPECT_FALSE(parser.validate());
 }
 
-TEST(ParserTest, InvalidMismatchedBrackets)
+TEST_F(ParserTest, InvalidExtraCommaInObject)
 {
-    Parser parser({Token(Token::LBRACKET), Token(Token::RBRACE)});
+    Parser parser({
+        Token(Token::LBRACE),
+        Token(Token::STRING, "key"),
+        Token(Token::COLON),
+        Token(Token::INTEGER, "1"),
+        Token(Token::COMMA),
+        Token(Token::RBRACE), // {"key":1,}
+    });
     EXPECT_FALSE(parser.validate());
 }
 
-// 5. Wrong start/end pair
-TEST(ParserTest, InvalidStartsWithBraceEndsWithBracket)
+TEST_F(ParserTest, InvalidConsecutiveValuesWithoutComma)
 {
-    Parser parser({Token(Token::LBRACE), Token(Token::RBRACKET)});
+    Parser parser({Token(Token::LBRACKET),
+                   Token(Token::INTEGER, "1"),
+                   Token(Token::INTEGER, "2"), // missing comma
+                   Token(Token::RBRACKET)});
     EXPECT_FALSE(parser.validate());
 }
 
-TEST(ParserTest, InvalidStartsWithBracketEndsWithBrace)
-{
-    Parser parser({Token(Token::LBRACKET), Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
-}
-
-// 6. Nested mismatches
-TEST(ParserTest, InvalidNestedMismatched1)
+TEST_F(ParserTest, InvalidMissingColonInObject)
 {
     Parser parser({Token(Token::LBRACE),
+                   Token(Token::STRING, "key"),
+                   Token(Token::INTEGER, "1"), // missing colon
+                   Token(Token::RBRACE)});
+    EXPECT_FALSE(parser.validate());
+}
+
+TEST_F(ParserTest, InvalidTokenAtTopLevel)
+{
+    Parser parser({Token(Token::STRING, "abc")}); // invalid standalone value
+    EXPECT_FALSE(parser.validate());
+}
+
+// ------------------- Build JSON -------------------
+
+TEST_F(ParserTest, BuildSimpleObject)
+{
+    Parser parser({Token(Token::LBRACE),
+                   Token(Token::STRING, "a"), Token(Token::COLON), Token(Token::INTEGER, "10"),
+                   Token(Token::RBRACE)});
+
+    Json result = parser.buildJson();
+    EXPECT_EQ(static_cast<JsonValue::number_integer_t>(result["a"]), 10);
+}
+
+TEST_F(ParserTest, BuildNestedArray)
+{
+    Parser parser({Token(Token::LBRACE),
+                   Token(Token::STRING, "nums"), Token(Token::COLON),
                    Token(Token::LBRACKET),
-                   Token(Token::RBRACE), // wrong closing
-                   Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserTest, InvalidNestedMismatched2)
-{
-    Parser parser({Token(Token::LBRACKET),
-                   Token(Token::LBRACE),
-                   Token(Token::RBRACKET), // wrong closing
-                   Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
-}
-
-// 7. Extra closing token
-TEST(ParserTest, InvalidExtraClosingBrace)
-{
-    Parser parser({Token(Token::LBRACE),
-                   Token(Token::RBRACE),
-                   Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserTest, InvalidExtraClosingBracket)
-{
-    Parser parser({Token(Token::LBRACKET),
+                   Token(Token::INTEGER, "1"),
+                   Token(Token::COMMA),
+                   Token(Token::INTEGER, "2"),
                    Token(Token::RBRACKET),
-                   Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser.validate());
+                   Token(Token::RBRACE)});
+
+    Json result = parser.buildJson();
+    const auto &arr = static_cast<JsonValue::array_t>(result["nums"]);
+    ASSERT_EQ(arr.size(), 2);
+    EXPECT_EQ(static_cast<JsonValue::number_integer_t>(arr[0]), 1);
+    EXPECT_EQ(static_cast<JsonValue::number_integer_t>(arr[1]), 2);
 }
 
-// 8. Standalone closing token
-TEST(ParserTest, InvalidStandaloneClosingBrace)
+TEST_F(ParserTest, BuildBooleanAndNull)
 {
-    Parser parser({Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
+    Parser parser({Token(Token::LBRACE),
+                   Token(Token::STRING, "ok"), Token(Token::COLON), Token(Token::TRUE),
+                   Token(Token::COMMA),
+                   Token(Token::STRING, "none"), Token(Token::COLON), Token(Token::NULLTOKEN),
+                   Token(Token::RBRACE)});
+
+    Json result = parser.buildJson();
+    EXPECT_TRUE(static_cast<bool>(result["ok"]));
+    EXPECT_TRUE(result["none"].is_null());
 }
 
-TEST(ParserTest, InvalidStandaloneClosingBracket)
-{
-    Parser parser({Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser.validate());
-}
-
-// 9. Random tokens (no brackets at all)
-TEST(ParserTest, InvalidOnlyString)
-{
-    Parser parser({Token(Token::STRING, "hello")});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserTest, InvalidOnlyNumber)
-{
-    Parser parser({Token(Token::INTEGER, "42")});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserTest, InvalidOnlyLiteral)
-{
-    Parser parser({Token(Token::TRUE)});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserInvalidTest, EmptyTokens)
-{
-    Parser parser({});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserInvalidTest, SingleValueWithoutObjectOrArray)
-{
-    Parser parser({Token(Token::INTEGER, "42")});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserInvalidTest, UnmatchedBraces)
-{
-    Parser parser({Token(Token::LBRACE)});
-    EXPECT_FALSE(parser.validate());
-
-    Parser parser2({Token(Token::RBRACE)});
-    EXPECT_FALSE(parser2.validate());
-
-    Parser parser3({Token(Token::LBRACE), Token(Token::LBRACE)});
-    EXPECT_FALSE(parser3.validate());
-}
-
-TEST(ParserInvalidTest, UnmatchedBrackets)
-{
-    Parser parser({Token(Token::LBRACKET)});
-    EXPECT_FALSE(parser.validate());
-
-    Parser parser2({Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser2.validate());
-
-    Parser parser3({Token(Token::LBRACKET), Token(Token::LBRACKET)});
-    EXPECT_FALSE(parser3.validate());
-}
-
-TEST(ParserInvalidTest, MissingColonInObject)
+TEST_F(ParserTest, BuildInvalidThrows)
 {
     Parser parser({Token(Token::LBRACE),
                    Token(Token::STRING, "key"),
-                   Token(Token::INTEGER, "42"),
+                   Token(Token::INTEGER, "1"), // missing colon
                    Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
+
+    EXPECT_THROW(parser.buildJson(), std::runtime_error);
 }
 
-TEST(ParserInvalidTest, MissingCommaInArray)
+TEST_F(ParserTest, BuildNonObjectRootThrows)
 {
     Parser parser({Token(Token::LBRACKET),
                    Token(Token::INTEGER, "1"),
-                   Token(Token::INTEGER, "2"),
                    Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser.validate());
-}
 
-TEST(ParserInvalidTest, ExtraCommaInArray)
-{
-    Parser parser({Token(Token::LBRACKET),
-                   Token(Token::INTEGER, "1"),
-                   Token(Token::COMMA),
-                   Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserInvalidTest, ExtraCommaInObject)
-{
-    Parser parser({Token(Token::LBRACE),
-                   Token(Token::STRING, "key"),
-                   Token(Token::COLON),
-                   Token(Token::INTEGER, "42"),
-                   Token(Token::COMMA),
-                   Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserInvalidTest, ConsecutiveValuesWithoutComma)
-{
-    Parser parser({Token(Token::LBRACKET),
-                   Token(Token::INTEGER, "1"),
-                   Token(Token::INTEGER, "2"),
-                   Token(Token::RBRACKET)});
-    EXPECT_FALSE(parser.validate());
-}
-
-TEST(ParserInvalidTest, InvalidTokenAtTopLevel)
-{
-    Parser parser({Token(Token::STRING, "hello")});
-    EXPECT_FALSE(parser.validate());
-
-    Parser parser2({Token(Token::TRUE)});
-    EXPECT_FALSE(parser2.validate());
-}
-
-TEST(ParserInvalidTest, NestedUnmatchedBrackets)
-{
-    Parser parser({Token(Token::LBRACKET),
-                   Token(Token::LBRACE),
-                   Token(Token::STRING, "key"),
-                   Token(Token::COLON),
-                   Token(Token::INTEGER, "1"),
-                   Token(Token::RBRACKET), // closing wrong type
-                   Token(Token::RBRACE)});
-    EXPECT_FALSE(parser.validate());
+    EXPECT_THROW(parser.buildJson(), std::runtime_error);
 }

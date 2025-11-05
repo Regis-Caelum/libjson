@@ -63,6 +63,7 @@ bool Parser::validate()
         bool expectValue;
         bool expectColon;
         bool expectComma;
+        bool hasValue;
     };
 
     std::stack<Context> s;
@@ -77,7 +78,7 @@ bool Parser::validate()
         {
             if (t.type != Token::LBRACE && t.type != Token::LBRACKET)
                 return false;
-            s.push({t.type, t.type == Token::LBRACKET, false, false});
+            s.push({t.type, true, false, false, false});
             continue;
         }
 
@@ -89,15 +90,16 @@ bool Parser::validate()
         case Token::LBRACKET:
             if (!ctx.expectValue)
                 return false;
-            s.push({t.type, t.type == Token::LBRACKET, false, false});
+            s.push({t.type, true, false, false, false});
             ctx.expectValue = false;
             ctx.expectComma = true;
+            ctx.hasValue = true;
             break;
 
         case Token::RBRACE:
             if (ctx.type != Token::LBRACE)
                 return false;
-            if (ctx.expectValue && !ctx.expectColon)
+            if (ctx.expectColon || ctx.expectValue)
                 return false;
             s.pop();
             if (!s.empty())
@@ -105,13 +107,14 @@ bool Parser::validate()
                 Context &parent = s.top();
                 parent.expectValue = false;
                 parent.expectComma = true;
+                parent.hasValue = true;
             }
             break;
 
         case Token::RBRACKET:
             if (ctx.type != Token::LBRACKET)
                 return false;
-            if (ctx.expectValue)
+            if (ctx.expectValue && ctx.hasValue)
                 return false;
             s.pop();
             if (!s.empty())
@@ -119,6 +122,7 @@ bool Parser::validate()
                 Context &parent = s.top();
                 parent.expectValue = false;
                 parent.expectComma = true;
+                parent.hasValue = true;
             }
             break;
 
@@ -129,6 +133,7 @@ bool Parser::validate()
                     return false;
                 ctx.expectColon = true;
                 ctx.expectValue = false;
+                ctx.hasValue = true;
             }
             else if (ctx.type == Token::LBRACKET)
             {
@@ -136,6 +141,7 @@ bool Parser::validate()
                     return false;
                 ctx.expectValue = false;
                 ctx.expectComma = true;
+                ctx.hasValue = true;
             }
             else
                 return false;
@@ -151,6 +157,7 @@ bool Parser::validate()
             ctx.expectValue = false;
             ctx.expectComma = true;
             ctx.expectColon = false;
+            ctx.hasValue = true;
             break;
 
         case Token::COLON:
@@ -158,16 +165,15 @@ bool Parser::validate()
                 return false;
             ctx.expectColon = false;
             ctx.expectValue = true;
+            ctx.expectComma = false;
             break;
 
         case Token::COMMA:
             if (!ctx.expectComma)
                 return false;
-            if (ctx.type == Token::LBRACE)
-                ctx.expectValue = true;
-            else if (ctx.type == Token::LBRACKET)
-                ctx.expectValue = true;
             ctx.expectComma = false;
+            ctx.expectValue = true;
+            ctx.expectColon = (ctx.type == Token::LBRACE);
             break;
 
         default:
@@ -183,6 +189,7 @@ inline Json Parser::buildJson()
     if (!validate())
         throw std::runtime_error("Invalid JSON");
 
+    reset(); // Reset position before parsing
     JsonValue v = parseValue(current());
 
     if (!v.is_object())
@@ -213,44 +220,37 @@ inline JsonValue Parser::parseValue(Token t)
     case Token::NULLTOKEN:
         return parseNull(t);
     default:
-        std::runtime_error("Invalid token");
+        throw std::runtime_error("Invalid token");
     }
 }
 
-inline JsonValue::string_t
-Parser::parseString(Token t)
+inline JsonValue::string_t Parser::parseString(Token t)
 {
-    consume();
     return t.lexeme;
 }
 
 inline JsonValue::number_integer_t Parser::parseInteger(Token t)
 {
-    consume();
     return std::stoi(t.lexeme);
 }
 
 inline JsonValue::number_float_t Parser::parseFloat(Token t)
 {
-    consume();
     return std::stod(t.lexeme);
 }
 
 inline JsonValue::boolean_t Parser::parseBoolean(Token t)
 {
-    consume();
-    return t.lexeme == "true";
+    return t.type == Token::TRUE;
 }
 
 inline JsonValue::nullptr_t Parser::parseNull(Token t)
 {
-    consume();
     return nullptr;
 }
 
 inline JsonValue::object_t Parser::parseObject(Token t)
 {
-    consume();
     JsonValue::object_t j;
     while (current().type != Token::RBRACE)
     {
@@ -277,7 +277,6 @@ inline JsonValue::object_t Parser::parseObject(Token t)
 
 inline JsonValue::array_t Parser::parseArray(Token t)
 {
-    consume();
     JsonValue::array_t arr;
 
     while (current().type != Token::RBRACKET)
